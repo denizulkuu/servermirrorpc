@@ -42,7 +42,7 @@ async def health_check(connection, request):
             upgrade = str(headers.get("upgrade", "")).lower()
             if "websocket" not in upgrade:
                 try:
-                    connection.respond(200, "ESP32 Mirror Relay - OK")
+                    await connection.respond(200, "ESP32 Mirror Relay - OK")
                 except Exception:
                     pass
                 return True
