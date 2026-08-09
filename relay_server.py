@@ -29,9 +29,12 @@ logging.basicConfig(
 )
 log = logging.getLogger("relay")
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config (Render.com env vars or defaults) ───────────────────────────────────
 PORT = int(os.environ.get("PORT", 8000))
 HOST = "0.0.0.0"
+DEFAULT_ROOM = os.environ.get("ROOM_TOKEN", "deniz-mirror").strip().lower()
+WS_MAX_SIZE = int(os.environ.get("WS_MAX_SIZE", 4 * 1024 * 1024))
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 # room_id → {"sender": ws | None, "display": ws | None}
 rooms = {}
@@ -45,11 +48,11 @@ async def health_check(connection, request):
         return
     if request.path == "/" and "websocket" not in str(request.headers.get("upgrade", "")).lower():
         # This is an HTTP GET, not a WebSocket upgrade — serve health page
-        html = b"""<!DOCTYPE html>
+        html = """<!DOCTYPE html>
 <html><head><title>ESP32 Mirror Relay</title></head>
 <body style="font-family:sans-serif;text-align:center;padding-top:80px;background:#1e1e2e;color:#cdd6f4">
-<h1 style="color:#a6e3a1">ESP32 Mirror Relay</h1>
-<p>Online. Connect with room token: <code>/?room=YOUR_TOKEN</code></p>
+<h1 style="color:#a6e3a1">ESP32 Mirror Relay Online</h1>
+<p>Connect with room token: <code>/?room=YOUR_TOKEN</code></p>
 <p style="color:#89b4fa;font-size:12px">WebSocket only - no web UI here.</p>
 </body></html>"""
         connection.respond(200, html)
@@ -199,14 +202,15 @@ async def main():
     log.info(f"✦ Mirror Relay v2 starting on {HOST}:{PORT}")
     log.info(f"  Health:  GET http://host:{PORT}/ → 200 OK")
     log.info(f"  Connect: ws://host:{PORT}/?room=TOKEN")
-    log.info(f"  Max frame size: 4 MB")
+    log.info(f"  Default room: {DEFAULT_ROOM}")
+    log.info(f"  Max frame size: {WS_MAX_SIZE // 1024 // 1024} MB")
     log.info(f"  python-websockets: {websockets.__version__}")
 
     async with serve(
         handle,
         HOST,
         PORT,
-        max_size=4 * 1024 * 1024,
+        max_size=WS_MAX_SIZE,
         process_request=health_check,   # HTTP health check handler
         ping_interval=20,                # keepalive WebSocket pings
         ping_timeout=10,
