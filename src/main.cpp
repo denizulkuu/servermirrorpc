@@ -197,7 +197,7 @@ void setup() {
     // ── Display init ─────────────────────────────────────────────────────────
     Arduino_DataBus *bus = new Arduino_ESP32SPI(
         TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, GFX_NOT_DEFINED);
-    gfx = new Arduino_ST7789(bus, TFT_RST, 1, true, 320, 240);
+    gfx = new Arduino_ST7789(bus, TFT_RST, 1, true, 240, 320);
     gfx->begin();
     gfx->fillScreen(BLACK);
     gfx->setTextColor(CYAN); gfx->setTextSize(2);
