@@ -1,0 +1,14 @@
+# Render.com Blueprint — auto-deploys the relay server
+# Push to GitHub, connect repo on Render, done.
+
+services:
+  - type: web
+    name: mirror-relay
+    runtime: python
+    buildCommand: pip install -r requirements_server.txt
+    startCommand: python relay_server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    autoDeploy: true
+    plan: free
