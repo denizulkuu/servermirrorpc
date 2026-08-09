@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""
-ESP32 Mirror Relay - Room-based WebSocket frame forwarder.
-Pairs one sender (GUI) to one display (ESP32) per room token.
-Deploy: Render.com Web Service (free tier) - Python 3.11+
-"""
+"""ESP32 Mirror Relay - Room-based WebSocket frame forwarder."""
 
 import asyncio, os, sys, logging
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 try:
     import websockets
@@ -22,43 +18,43 @@ PORT = int(os.environ.get("PORT", 8000))
 WS_MAX_SIZE = int(os.environ.get("WS_MAX_SIZE", 4 * 1024 * 1024))
 rooms = {}
 
-
-def get_query(ws):
-    """Extract raw query string from WebSocket request."""
-    try:
-        return (getattr(ws.request, "raw_query", None)
-                or getattr(ws.request, "query", None) or "")
-    except AttributeError:
-        return ""
+# Store query params per connection ID since ws.request.query is empty after handshake
+query_store = {}
 
 
 async def process_request(connection, request):
-    """
-    websockets v17 process_request handler.
-    - Return None: proceed with WebSocket upgrade.
-    - Return connection.respond(status, str_body): serve HTTP response.
-      NOTE: respond() is SYNC (not await), body must be str (not bytes).
-    """
+    """Intercept HTTP→WS upgrade. Save query params, serve health check."""
+    # Parse query string from raw request path (available here, not later)
+    raw_url = request.path or "/"
+    if "?" in raw_url:
+        q_part = raw_url.split("?", 1)[1]
+        qs = parse_qs(q_part)
+        query_store[id(connection)] = {
+            "room": (qs.get("room", ["default"])[0] or "default").strip().lower(),
+            "role": (qs.get("role", [None])[0] or "").strip().lower(),
+        }
+    else:
+        query_store[id(connection)] = {"room": "default", "role": ""}
+
+    # Health check for non-WebSocket requests
     headers = request.headers or {}
     upgrade = str(headers.get("upgrade", "")).lower()
-    if "websocket" in upgrade:
-        return None  # WS upgrade
-
-    # HTTP health check - respond() is sync, takes str body
-    return connection.respond(200, "ESP32 Mirror Relay - OK")
+    if "websocket" not in upgrade:
+        return connection.respond(200, "ESP32 Mirror Relay - OK")
+    return None  # proceed with WS upgrade
 
 
 async def handle(ws):
     """Assign sender/display role, relay binary frames."""
-    raw_q = get_query(ws)
-    qs = parse_qs(raw_q)
-    room_id = qs.get("room", ["default"])[0].strip().lower()
-    role_req = (qs.get("role", [None])[0] or "").strip().lower()
+    cid = id(ws)
+    qinfo = query_store.pop(cid, {"room": "default", "role": ""})
+    room_id = qinfo["room"]
+    role_req = qinfo["role"]
 
     room = rooms.setdefault(room_id, {"sender": None, "display": None})
     peer = ws.remote_address[0] if ws.remote_address else "?"
 
-    # Role: explicit param overrides auto-assign
+    # Role assignment
     if role_req in ("sender", "display"):
         role = role_req
     elif room["display"] is None:
@@ -68,6 +64,7 @@ async def handle(ws):
     else:
         role = "display"
 
+    # Replace existing connection of same role
     old = room.get(role)
     if old:
         try: await old.close(1001, "replaced")
@@ -88,7 +85,7 @@ async def handle(ws):
     except websockets.exceptions.ConnectionClosed:
         pass
     except Exception as e:
-        log.warning("[%s] %s error: %s", room_id, role, e)
+        log.warning("[%s] %s error: %s", room_id, role, type(e).__name__)
 
     if room.get(role) is ws:
         room[role] = None
@@ -113,7 +110,7 @@ async def prune_task():
 
 
 async def main():
-    log.info("Mirror Relay v6 on 0.0.0.0:%d (%d MB)", PORT, WS_MAX_SIZE // 1024 // 1024)
+    log.info("Mirror Relay v7 on 0.0.0.0:%d (%d MB)", PORT, WS_MAX_SIZE // 1024 // 1024)
     async with serve(handle, "0.0.0.0", PORT,
                      max_size=WS_MAX_SIZE,
                      process_request=process_request):
