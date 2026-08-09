@@ -29,7 +29,7 @@
 #define WIFI_PASS_FALLBACK "deniz1108"
 
 // ── Remote relay (only used in REMOTE mode) ──────────────────────────────────
-#define RELAY_HOST "mirror-relay.onrender.com"
+#define RELAY_HOST "servermirrorpc.onrender.com"
 #define RELAY_PORT 443
 #define RELAY_PATH "/?room=deniz-mirror"
 

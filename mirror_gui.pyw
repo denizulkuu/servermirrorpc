@@ -30,7 +30,7 @@ FRAME_H        = 180
 MAX_WS_SIZE    = 4 * 1024 * 1024
 
 # Remote relay
-RELAY_HOST_DEFAULT = "mirror-relay.onrender.com"
+RELAY_HOST_DEFAULT = "servermirrorpc.onrender.com"
 RELAY_PORT_DEFAULT = 443
 ROOM_DEFAULT       = "deniz-mirror"
 
