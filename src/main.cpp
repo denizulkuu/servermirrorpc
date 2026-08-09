@@ -19,7 +19,7 @@
 // ── Pick ONE mode ────────────────────────────────────────────────────────────
 #define RUN_MODE_LOCAL  0   // ESP32 = WebSocket SERVER (PC connects to ESP32)
 #define RUN_MODE_REMOTE 1   // ESP32 = WebSocket CLIENT (connects to cloud relay)
-#define RUN_MODE RUN_MODE_LOCAL
+#define RUN_MODE RUN_MODE_REMOTE
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── WiFi credentials (home + hotspot fallback) ───────────────────────────────
