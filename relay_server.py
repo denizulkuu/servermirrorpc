@@ -25,7 +25,6 @@ rooms = {}
 
 def get_room(ws) -> str:
     """Extract room token from WebSocket query string."""
-    # websockets v17: query is on ws.request
     try:
         raw = (getattr(ws.request, "raw_query", None)
                or getattr(ws.request, "query", None) or "")
@@ -36,7 +35,6 @@ def get_room(ws) -> str:
         room = qs.get("room", [None])[0]
         if room:
             return room.strip().lower()
-    # Fallback for older versions
     try:
         from urllib.parse import urlparse
         qs = parse_qs(urlparse(ws.request.path).query)
@@ -51,18 +49,17 @@ def get_room(ws) -> str:
 async def process_request(connection, request):
     """
     websockets v17 process_request handler.
-    Return (status, headers, body) to respond with HTTP.
-    Return None to proceed with WebSocket upgrade.
+    - Return None: proceed with WebSocket upgrade.
+    - Return connection.respond(status, str_body): serve HTTP response.
+      NOTE: respond() is SYNC (not await), body must be str (not bytes).
     """
-    # If the client wants to upgrade to WebSocket, let it through
     headers = request.headers or {}
     upgrade = str(headers.get("upgrade", "")).lower()
     if "websocket" in upgrade:
-        return None  # proceed with WS handshake
+        return None  # WS upgrade
 
-    # Otherwise, serve a health-check HTTP response
-    return (200, [("Content-Type", "text/plain")],
-            "ESP32 Mirror Relay - OK")
+    # HTTP health check - respond() is sync, takes str body
+    return connection.respond(200, "ESP32 Mirror Relay - OK")
 
 
 async def handle(ws):
@@ -71,15 +68,14 @@ async def handle(ws):
     room = rooms.setdefault(room_id, {"sender": None, "display": None})
     peer = ws.remote_address[0] if ws.remote_address else "?"
 
-    # Role assignment: empty room -> display first, then sender
+    # Role assignment
     if room["display"] is None:
         role = "display"
     elif room["sender"] is None:
         role = "sender"
     else:
-        role = "display"  # ESP32 reconnects more often, replace display
+        role = "display"
 
-    # Kick old occupant of same role
     old = room.get(role)
     if old:
         try: await old.close(1001, "replaced")
@@ -88,7 +84,6 @@ async def handle(ws):
     room[role] = ws
     log.info("[%s] %s connected (%s)", room_id, role.upper(), peer)
 
-    # Relay loop
     try:
         async for message in ws:
             if role == "sender" and isinstance(message, bytes):
@@ -126,7 +121,7 @@ async def prune_task():
 
 
 async def main():
-    log.info("Mirror Relay v4 on 0.0.0.0:%d (%d MB)", PORT, WS_MAX_SIZE // 1024 // 1024)
+    log.info("Mirror Relay v5 on 0.0.0.0:%d (%d MB)", PORT, WS_MAX_SIZE // 1024 // 1024)
     async with serve(handle, "0.0.0.0", PORT,
                      max_size=WS_MAX_SIZE,
                      process_request=process_request):
