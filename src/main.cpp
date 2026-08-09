@@ -31,7 +31,7 @@
 // ── Remote relay (only used in REMOTE mode) ──────────────────────────────────
 #define RELAY_HOST "servermirrorpc.onrender.com"
 #define RELAY_PORT 443
-#define RELAY_PATH "/?room=deniz-mirror"
+#define RELAY_PATH "/?room=deniz-mirror&role=display"
 
 // ── Display (ST7789 240x320) ────────────────────────────────────────────────
 #define TFT_SCLK     5
@@ -64,8 +64,8 @@ bool   wifiOk = false;
 
 // ── TJpg_Decoder callback — draws decoded JPEG to TFT ────────────────────────
 bool jpegDrawCB(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t *bitmap) {
-    if (y >= TFT_H) return false;            // clip off‑screen
-    gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
+    if (y >= 240) return false;
+    gfx->draw16bitRGBBitmap(x, y + 30, bitmap, w, h);
     return true;
 }
 
@@ -184,7 +184,7 @@ void setup() {
     // ── Display init ─────────────────────────────────────────────────────────
     Arduino_DataBus *bus = new Arduino_ESP32SPI(
         TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, GFX_NOT_DEFINED);
-    gfx = new Arduino_ST7789(bus, TFT_RST, 0, true, TFT_W, TFT_H);
+    gfx = new Arduino_ST7789(bus, TFT_RST, 1, true, 240, 320);
     gfx->begin();
     gfx->fillScreen(BLACK);
     gfx->setTextColor(CYAN); gfx->setTextSize(2);

@@ -23,27 +23,13 @@ WS_MAX_SIZE = int(os.environ.get("WS_MAX_SIZE", 4 * 1024 * 1024))
 rooms = {}
 
 
-def get_room(ws) -> str:
-    """Extract room token from WebSocket query string."""
+def get_query(ws):
+    """Extract raw query string from WebSocket request."""
     try:
-        raw = (getattr(ws.request, "raw_query", None)
-               or getattr(ws.request, "query", None) or "")
+        return (getattr(ws.request, "raw_query", None)
+                or getattr(ws.request, "query", None) or "")
     except AttributeError:
-        raw = ""
-    if raw:
-        qs = parse_qs(raw)
-        room = qs.get("room", [None])[0]
-        if room:
-            return room.strip().lower()
-    try:
-        from urllib.parse import urlparse
-        qs = parse_qs(urlparse(ws.request.path).query)
-        room = qs.get("room", [None])[0]
-        if room:
-            return room.strip().lower()
-    except Exception:
-        pass
-    return "default"
+        return ""
 
 
 async def process_request(connection, request):
@@ -64,12 +50,18 @@ async def process_request(connection, request):
 
 async def handle(ws):
     """Assign sender/display role, relay binary frames."""
-    room_id = get_room(ws)
+    raw_q = get_query(ws)
+    qs = parse_qs(raw_q)
+    room_id = qs.get("room", ["default"])[0].strip().lower()
+    role_req = (qs.get("role", [None])[0] or "").strip().lower()
+
     room = rooms.setdefault(room_id, {"sender": None, "display": None})
     peer = ws.remote_address[0] if ws.remote_address else "?"
 
-    # Role assignment
-    if room["display"] is None:
+    # Role: explicit param overrides auto-assign
+    if role_req in ("sender", "display"):
+        role = role_req
+    elif room["display"] is None:
         role = "display"
     elif room["sender"] is None:
         role = "sender"
@@ -121,7 +113,7 @@ async def prune_task():
 
 
 async def main():
-    log.info("Mirror Relay v5 on 0.0.0.0:%d (%d MB)", PORT, WS_MAX_SIZE // 1024 // 1024)
+    log.info("Mirror Relay v6 on 0.0.0.0:%d (%d MB)", PORT, WS_MAX_SIZE // 1024 // 1024)
     async with serve(handle, "0.0.0.0", PORT,
                      max_size=WS_MAX_SIZE,
                      process_request=process_request):

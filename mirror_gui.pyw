@@ -118,7 +118,7 @@ class StreamEngine:
             if self.mode == "local":
                 uri = f"ws://{ip}:{port}"
             else:
-                uri = f"wss://{relay_host}:{relay_port}/?room={room}"
+                uri = f"wss://{relay_host}:{relay_port}/?room={room}&role=sender"
 
             frame  = 0
             t0     = time.time()
