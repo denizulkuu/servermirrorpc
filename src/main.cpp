@@ -15,6 +15,7 @@
 #include <WebSocketsClient.h>
 #include <Arduino_GFX_Library.h>
 #include <TJpg_Decoder.h>
+#include <time.h>
 
 // ── Pick ONE mode ────────────────────────────────────────────────────────────
 #define RUN_MODE_LOCAL  0   // ESP32 = WebSocket SERVER (PC connects to ESP32)
@@ -112,8 +113,18 @@ void wsEventLocal(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
 void wsEventRemote(WStype_t type, uint8_t *payload, size_t length) {
     if (type == WStype_CONNECTED) {
         Serial.println("[WS] Connected to relay");
+        gfx->fillRect(0, 30, 320, 20, BLACK);
+        gfx->setCursor(5, 32);
+        gfx->setTextColor(GREEN);
+        gfx->setTextSize(1);
+        gfx->print("WS Connected - waiting for frames");
     } else if (type == WStype_DISCONNECTED) {
-        Serial.println("[WS] Disconnected from relay — will reconnect");
+        Serial.println("[WS] Disconnected - reconnecting");
+        gfx->fillRect(0, 30, 320, 20, BLACK);
+        gfx->setCursor(5, 32);
+        gfx->setTextColor(RED);
+        gfx->setTextSize(1);
+        gfx->print("WS disconnected - reconnecting");
     } else if (type == WStype_BIN && length >= 4) {
         uint32_t jpegLen = payload[0] | ((uint32_t)payload[1] << 8)
                         | ((uint32_t)payload[2] << 16) | ((uint32_t)payload[3] << 24);
@@ -211,6 +222,30 @@ void setup() {
     wifiOk = connectWiFi();
     if (!wifiOk) return;
 
+    // ── NTP time sync (required for SSL certificate validation) ──────────────
+    gfx->fillRect(0, 50, 320, 30, BLACK);
+    gfx->setCursor(10, 55);
+    gfx->setTextColor(WHITE);
+    gfx->setTextSize(1);
+    gfx->print("Syncing time...");
+    configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+    time_t now = time(nullptr);
+    int ntpTries = 0;
+    while (now < 1700000000 && ntpTries < 20) {  // year 2023+
+        delay(500);
+        now = time(nullptr);
+        ntpTries++;
+        gfx->print(".");
+    }
+    if (now > 1700000000) {
+        struct tm ti;
+        localtime_r(&now, &ti);
+        gfx->printf("\nTime OK: %02d:%02d:%02d", ti.tm_hour, ti.tm_min, ti.tm_sec);
+    } else {
+        gfx->println("\nNTP FAIL - SSL may not work");
+    }
+    delay(1000);
+
     gfx->fillScreen(BLACK);
 
 #if RUN_MODE == RUN_MODE_LOCAL
@@ -227,10 +262,8 @@ void setup() {
     // ── Start WebSocket CLIENT → relay ───────────────────────────────────────
     wsCli = new WebSocketsClient();
     wsCli->onEvent(wsEventRemote);
+    wsCli->setReconnectInterval(3000);
     wsCli->beginSSL(RELAY_HOST, RELAY_PORT, RELAY_PATH);
-    // setInsecure() only needed if relay uses self‑signed certs
-    // wsCli->setInsecure();
-    wsCli->setReconnectInterval(3000);   // auto‑reconnect every 3 s
     gfx->setTextColor(GREEN); gfx->setTextSize(1);
     gfx->setCursor(5, 3);  gfx->println("REMOTE MODE");
     gfx->setCursor(5, 18); gfx->printf("Relay: %s", RELAY_HOST);

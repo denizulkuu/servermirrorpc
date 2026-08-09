@@ -18,7 +18,8 @@ PORT = int(os.environ.get("PORT", 8000))
 WS_MAX_SIZE = int(os.environ.get("WS_MAX_SIZE", 4 * 1024 * 1024))
 rooms = {}
 
-# Store query params per connection ID since ws.request.query is empty after handshake
+# Store query params during handshake, match in handle()
+# Key: ws object itself (same request object across process_request and handle)
 query_store = {}
 
 
