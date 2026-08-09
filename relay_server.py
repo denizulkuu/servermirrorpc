@@ -18,39 +18,29 @@ PORT = int(os.environ.get("PORT", 8000))
 WS_MAX_SIZE = int(os.environ.get("WS_MAX_SIZE", 4 * 1024 * 1024))
 rooms = {}
 
-# Store query params during handshake, match in handle()
-# Key: ws object itself (same request object across process_request and handle)
-query_store = {}
-
-
 async def process_request(connection, request):
     """Intercept HTTP→WS upgrade. Save query params, serve health check."""
-    # Parse query string from raw request path (available here, not later)
     raw_url = request.path or "/"
+    room = "default"
+    role = ""
     if "?" in raw_url:
-        q_part = raw_url.split("?", 1)[1]
-        qs = parse_qs(q_part)
-        query_store[id(connection)] = {
-            "room": (qs.get("room", ["default"])[0] or "default").strip().lower(),
-            "role": (qs.get("role", [None])[0] or "").strip().lower(),
-        }
-    else:
-        query_store[id(connection)] = {"room": "default", "role": ""}
+        qs = parse_qs(raw_url.split("?", 1)[1])
+        room = (qs.get("room", ["default"])[0] or "default").strip().lower()
+        role = (qs.get("role", [""])[0] or "").strip().lower()
+    # Attach directly to connection object (same object becomes ws after upgrade)
+    connection._mirror_room = room
+    connection._mirror_role = role
 
-    # Health check for non-WebSocket requests
     headers = request.headers or {}
-    upgrade = str(headers.get("upgrade", "")).lower()
-    if "websocket" not in upgrade:
+    if "websocket" not in str(headers.get("upgrade", "")).lower():
         return connection.respond(200, "ESP32 Mirror Relay - OK")
-    return None  # proceed with WS upgrade
+    return None
 
 
 async def handle(ws):
     """Assign sender/display role, relay binary frames."""
-    cid = id(ws)
-    qinfo = query_store.pop(cid, {"room": "default", "role": ""})
-    room_id = qinfo["room"]
-    role_req = qinfo["role"]
+    room_id = getattr(ws, '_mirror_room', 'default')
+    role_req = getattr(ws, '_mirror_role', '')
 
     room = rooms.setdefault(room_id, {"sender": None, "display": None})
     peer = ws.remote_address[0] if ws.remote_address else "?"

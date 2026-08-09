@@ -135,6 +135,8 @@ void wsEventRemote(WStype_t type, uint8_t *payload, size_t length) {
         memcpy(jpegBuf[jpegActive], payload + 4, jpegLen);
         jpegReady[jpegActive] = jpegLen;
         jpegActive ^= 1;
+        static int rxFrames = 0;
+        Serial.printf("[RX] frame %d  size=%u B  buf=%d\n", ++rxFrames, jpegLen, jpegActive);
     }
 }
 
@@ -195,7 +197,7 @@ void setup() {
     // ── Display init ─────────────────────────────────────────────────────────
     Arduino_DataBus *bus = new Arduino_ESP32SPI(
         TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, GFX_NOT_DEFINED);
-    gfx = new Arduino_ST7789(bus, TFT_RST, 1, true, 240, 320);
+    gfx = new Arduino_ST7789(bus, TFT_RST, 1, true, 320, 240);
     gfx->begin();
     gfx->fillScreen(BLACK);
     gfx->setTextColor(CYAN); gfx->setTextSize(2);
@@ -296,6 +298,10 @@ void loop() {
 
             if (TJpgDec.drawJpg(0, 0, jpegBuf[i], sz) == 0) {
                 fc++;
+                static int decFrames = 0;
+                if (++decFrames % 30 == 0) Serial.printf("[DEC] decoded %d frames  FPS:%d\n", decFrames, fv);
+            } else {
+                Serial.printf("[DEC] FAILED on %u bytes\n", sz);
             }
             drawFPS();
         }
